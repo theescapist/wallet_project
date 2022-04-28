@@ -1,0 +1,4 @@
+.idea
+wallets/__pycache__/
+wallets/migrations/__pycache__/
+wproject/__pycache__/
