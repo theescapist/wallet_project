@@ -17,5 +17,3 @@ class Wallet(models.Model):
 
     class Meta:
         ordering = ['owner']
-
-

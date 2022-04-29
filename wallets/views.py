@@ -1,24 +1,16 @@
-from django.contrib.auth.models import User, Group
 from django.db import transaction
 from rest_framework.generics import get_object_or_404
-from wallets.models import Wallet, Currency
-from rest_framework import viewsets
 from rest_framework import generics
 from rest_framework.permissions import IsAdminUser
-from wallets.serializers import *
-from wallets.permissions import IsOwner
-from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from wallets.permissions import IsOwner
+from wallets.serializers import *
 
 
-class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = User.objects.all().order_by('-date_joined')
+class UserList(generics.ListAPIView):
+    queryset = User.objects.all()
     serializer_class = UserSerializer
-
-
-class GroupViewSet(viewsets.ModelViewSet):
-    queryset = Group.objects.all()
-    serializer_class = GroupSerializer
 
 
 class WalletListView(generics.ListCreateAPIView):
@@ -28,21 +20,27 @@ class WalletListView(generics.ListCreateAPIView):
 
 
 class WalletDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwner, IsAdminUser]
     queryset = Wallet.objects.all()
     serializer_class = WalletSerializer
 
 
 class WalletRenameView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsOwner, IsAdminUser]
     queryset = Wallet.objects.all()
     serializer_class = WalletRenameSerializer
 
 
 class WalletDepositView(APIView):
+    permission_classes = [IsOwner, IsAdminUser]
+
+    # формируем PUT запрос
     def put(self, request, pk):
         data = request.data
         wallet = get_object_or_404(Wallet, id=pk)
         amount = data['amount']
         serializer = WalletDepositSerializer(wallet, data=data)
+        # проверяем данные в сериализаторе и производим транзакцию
         if serializer.is_valid(raise_exception=True):
             try:
                 with transaction.atomic():
@@ -54,23 +52,25 @@ class WalletDepositView(APIView):
 
 
 class WalletTransferView(APIView):
-    #1. прописать логику конверсии
-    #2. прописать остальные логики эндпоинтов
-    #3. написать и применить serializer (validated data)
-    #4. написать celery
+    permission_classes = [IsOwner, IsAdminUser]
+
+    # формируем PUT запрос
     def put(self, request, pk):
         data = request.data
         wallet_from = get_object_or_404(Wallet, id=pk)
+        # передаем в сериализатор контекст, для проверки хватит ли на кошельке денег для трансфера и проверяем данные
         serializer = WalletTransferSerializer(Wallet, data=data, context={"wallet_from_amount" : wallet_from.amount})
         serializer.is_valid(raise_exception=True)
 
         wallet_to = Wallet.objects.get(pk=data['wallet_to_id'])
         amount = data['amount']
         ratio = 1
+        # запрашиваем коды валют и если они разные, изменяем коэффициент перевода(ratio)
         currency_from = Currency.objects.get(pk=wallet_from.currency.id)
         currency_to = Currency.objects.get(pk=wallet_to.currency.id)
         if currency_from.code != currency_to.code:
             ratio = currency_from.ratio / currency_to.ratio
+        # производим транзакцию с конвертацией
         try:
             with transaction.atomic():
                 wallet_from.amount -= amount
@@ -83,12 +83,16 @@ class WalletTransferView(APIView):
 
 
 class WalletWithdrawView(APIView):
+    permission_classes = [IsOwner, IsAdminUser]
 
+    # формируем PUT запрос
     def put(self, request, pk):
         data = request.data
         wallet = get_object_or_404(Wallet, id=pk)
+        serializer = WalletWithdrawSerializer(Wallet,  context={"wallet_amount" : wallet.amount})
+
         amount = data['amount']
-        serializer = WalletWithdrawSerializer(Wallet, data=data)
+        # проверяем данные в сериализаторе и производим транзакцию
         if serializer.is_valid(raise_exception=True):
             try:
                 with transaction.atomic():
@@ -100,6 +104,7 @@ class WalletWithdrawView(APIView):
 
 
 class WalletDeleteView(generics.DestroyAPIView):
+    permission_classes = [IsOwner, IsAdminUser]
     queryset = Wallet.objects.all()
     serializer_class = WalletSerializer
 
@@ -110,6 +115,7 @@ class CurrenciesView(generics.ListAPIView):
 
 
 class CurrenciesDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdminUser]
     queryset = Currency.objects.all()
     serializer_class = CurrencySerializer
     
