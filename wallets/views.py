@@ -41,14 +41,14 @@ class WalletDepositView(APIView):
         amount = data['amount']
         serializer = WalletDepositSerializer(wallet, data=data)
         # проверяем данные в сериализаторе и производим транзакцию
-        if serializer.is_valid(raise_exception=True):
-            try:
-                with transaction.atomic():
-                    wallet.amount += amount
-                    wallet.save()
-            except Exception as e:
-                return Response({"error": f"Transaction failed: {str(e)}"}, status=500)
-            return Response({"message": "Transaction success"})
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                wallet.amount += amount
+                wallet.save()
+        except Exception as e:
+            return Response({"error": f"Transaction failed: {str(e)}"}, status=500)
+        return Response({"message": "Transaction success"})
 
 
 class WalletTransferView(APIView):
@@ -90,17 +90,17 @@ class WalletWithdrawView(APIView):
         data = request.data
         wallet = get_object_or_404(Wallet, id=pk)
         serializer = WalletWithdrawSerializer(Wallet,  context={"wallet_amount" : wallet.amount})
+        serializer.is_valid(raise_exception=True)
 
         amount = data['amount']
         # проверяем данные в сериализаторе и производим транзакцию
-        if serializer.is_valid(raise_exception=True):
-            try:
-                with transaction.atomic():
-                    wallet.amount -= amount
-                    wallet.save()
-            except Exception as e:
-                return Response({"error": f"Transaction failed: {str(e)}"}, status=500)
-            return Response({"message": "Transaction success"})
+        try:
+            with transaction.atomic():
+                wallet.amount -= amount
+                wallet.save()
+        except Exception as e:
+            return Response({"error": f"Transaction failed: {str(e)}"}, status=500)
+        return Response({"message": "Transaction success"})
 
 
 class WalletDeleteView(generics.DestroyAPIView):
